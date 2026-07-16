@@ -1,9 +1,10 @@
-from tkinter.constants import N
+from cmath import log
+from xxlimited import new
 
 from elasticsearch import AsyncElasticsearch
 
 from app.core.config import get_settings
-from app.schemas.log_entry import LogEntry, LogEntryCreate
+from app.schemas.log_entry import LogEntryRead, LogEntryCreate
 
 
 class LogEntryService:
@@ -11,20 +12,22 @@ class LogEntryService:
         self.es_client = es_client
         self.settings = get_settings()
 
-    async def index_log_entry(self, log_entry: LogEntryCreate) -> LogEntry:
-        saved_log = await self.es_client.index(
+    async def index_log_entry(self, log_entry: LogEntryCreate) -> LogEntryRead:
+        new_log = LogEntryRead(**log_entry.model_dump())
+
+        await self.es_client.index(
             index=self.settings.es_index_logs,
-            id=log_entry.id,
-            document=log_entry.model_dump()
+            id=new_log.id,
+            document=new_log.model_dump()
         )
-        return LogEntry(**saved_log.body)
+        return new_log
 
     async def search_log_entries(
         self, query: str | None = None,
         level: str | None = None,
         source_id: str | None = None,
         from_: int = 0,
-        size: int = 0) -> list[LogEntry]:
+        size: int = 0) -> list[LogEntryRead]:
         must = []
         filter_ = []
         if query:
@@ -41,7 +44,7 @@ class LogEntryService:
             "size": size
         }
         response = await self.es_client.search(body=body)
-        return [LogEntry(**hit["_source"]) for hit in response["hits"]["hits"]]
+        return [LogEntryRead(**hit["_source"]) for hit in response["hits"]["hits"]]
 
     async def get_stats(self) -> dict:
         body = {
@@ -55,7 +58,7 @@ class LogEntryService:
         response = await self.es_client.search(body=body)
         return response["aggregations"]
 
-    async def delete_logs(self, source_id: str, /) -> None:
+    async def delete_log(self, source_id: str, /) -> None:
         await self.es_client.delete_by_query(
             index=self.settings.es_index_logs,
             body={"query": {"match": {"source_id": source_id}}}

@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.18.5",
     "asyncpg>=0.31.0",
     "elasticsearch[async]<9.0.0",
+    "faker>=40.31.0",
     "fastapi[standard]>=0.139.0",
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",

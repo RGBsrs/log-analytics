@@ -21,7 +21,7 @@ class LogEntryBase(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
-class LogEntry(LogEntryBase):
+class LogEntryRead(LogEntryBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
