@@ -1,9 +1,8 @@
-from cmath import log
-from xxlimited import new
-
 from elasticsearch import AsyncElasticsearch
+from elasticsearch.helpers import async_bulk
 
 from app.core.config import get_settings
+from app.core.elasticsearch import get_es_client
 from app.schemas.log_entry import LogEntryRead, LogEntryCreate
 
 
@@ -63,3 +62,21 @@ class LogEntryService:
             index=self.settings.es_index_logs,
             body={"query": {"match": {"source_id": source_id}}}
         )
+
+    async def index_log_entry_bulk(self, logs: list[LogEntryCreate]) -> list[LogEntryRead]:
+        new_logs = [LogEntryRead(**new_log.model_dump()) for new_log in logs]
+        body = [
+            {
+                "_index": self.settings.es_index_logs,
+                "_id": new_log.id,
+                **new_log.model_dump()
+            }
+            for new_log in new_logs
+        ]
+        count, _ = await async_bulk(self.es_client, body)
+        print(f"Indexed {count} log entries")
+        return new_logs
+
+def get_log_entry_service() -> LogEntryService:
+    es_client = get_es_client()
+    return LogEntryService(es_client)
