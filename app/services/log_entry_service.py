@@ -45,7 +45,7 @@ class LogEntryService:
         response = await self.es_client.search(body=body)
         return [LogEntryRead(**hit["_source"]) for hit in response["hits"]["hits"]]
 
-    async def get_stats(self) -> dict:
+    async def get_stats(self) -> list[dict]:
         body = {
             "size": 0,
             "aggs": {
@@ -55,7 +55,7 @@ class LogEntryService:
             }
         }
         response = await self.es_client.search(body=body)
-        return response["aggregations"]
+        return response["aggregations"]["by_level"]["buckets"]
 
     async def delete_log(self, source_id: str, /) -> None:
         await self.es_client.delete_by_query(
