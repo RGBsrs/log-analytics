@@ -1,15 +1,7 @@
 import strawberry
 from datetime import datetime
 
-@strawberry.type
-class LogEntryType:
-    id: str
-    level: str
-    message: str
-    source_id: str
-    project: str
-    timestamp: datetime
-    metadata: strawberry.scalars.JSON
+from app.schemas.log_entry import LogLevel
 
 @strawberry.type
 class LogSourceType:
@@ -19,6 +11,17 @@ class LogSourceType:
     description: str | None
     is_active: bool
     created_at: datetime
+
+@strawberry.type
+class LogEntryType:
+    id: str
+    level: str
+    message: str
+    source_id: str
+    project: str
+    timestamp: datetime
+    metadata: strawberry.scalars.JSON
+    source: LogSourceType | None = None  # ← нове поле
 
 @strawberry.type
 class LogStatsType:
@@ -47,3 +50,12 @@ class LogFilterInput:
     source_id: str | None = None
     page: int = 0
     size: int = 20
+
+    def to_dict(self):
+        return {
+            "query": self.query,
+            "level": LogLevel(self.level) if self.level else None,
+            "source_id": self.source_id,
+            "page": self.page,
+            "size": self.size,
+        }

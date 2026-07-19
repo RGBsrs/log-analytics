@@ -15,6 +15,16 @@ class LogSourceService:
     async def get_by_id(self, id: UUID) -> LogSource | None:
         return await self.session.get(LogSource, id)
 
+    async def get_by_name(self, name: str) -> LogSource | None:
+        query = select(LogSource).where(LogSource.source_type == name)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_by_names(self, names: list[str]) -> Sequence[LogSource]:
+        query = select(LogSource).where(LogSource.source_type.in_(names))
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
     async def get_all(self, is_active: bool | None = None) -> Sequence[LogSource]:
         query = select(LogSource)
         if is_active is not None:

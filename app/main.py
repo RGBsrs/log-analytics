@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
 
 from .api.routes.health import router as health_router
 from .api.routes.log_sources import router as log_sources_router
@@ -18,3 +20,5 @@ app.include_router(log_sources_router, prefix=API_PREFIX)
 app.include_router(logs_router, prefix=API_PREFIX)
 app.include_router(ingest_router, prefix=API_PREFIX)
 app.include_router(graphql_router, prefix="/graphql")
+
+app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")

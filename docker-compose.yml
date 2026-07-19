@@ -74,6 +74,9 @@ services:
         - action: sync
           path: ./app
           target: /app/app
+        - action: sync
+          path: ./frontend
+          target: /app/frontend
     restart: unless-stopped
 
 volumes:

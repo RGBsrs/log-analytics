@@ -1,17 +1,31 @@
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.database import get_session
 from app.core.elasticsearch import get_es_client
 from app.schemas.log_entry import LogEntryRead, LogEntryCreate
+from app.schemas.log_source import LogSourceCreate
+from app.services.log_source_service import LogSourceService
 
 
 class LogEntryService:
-    def __init__(self, es_client: AsyncElasticsearch):
+    def __init__(self, es_client: AsyncElasticsearch, session: AsyncSession):
         self.es_client = es_client
+        self.session = session
         self.settings = get_settings()
 
     async def index_log_entry(self, log_entry: LogEntryCreate) -> LogEntryRead:
+        log_source_service = LogSourceService(self.session)
+        log_source = await log_source_service.get_by_name(log_entry.source_id)
+        if log_source is None:
+            await log_source_service.create(LogSourceCreate(
+                name=log_entry.source_id,
+                source_type="auto",
+                description="Auto-created from log ingestion"
+            ))
         new_log = LogEntryRead(**log_entry.model_dump())
 
         await self.es_client.index(
@@ -65,6 +79,17 @@ class LogEntryService:
 
     async def index_log_entry_bulk(self, logs: list[LogEntryCreate]) -> list[LogEntryRead]:
         new_logs = [LogEntryRead(**new_log.model_dump()) for new_log in logs]
+        unique_sources = list({log_.source_id for log_ in new_logs})
+        log_source_service = LogSourceService(self.session)
+        existing = await log_source_service.get_by_names(unique_sources)
+        existing_names = {s.name for s in existing}
+        for name in unique_sources:
+            if name not in existing_names:
+                await log_source_service.create(LogSourceCreate(
+                    name=name,
+                    source_type="auto",
+                    description="Auto-created from log ingestion"
+                ))
         body = [
             {
                 "_index": self.settings.es_index_logs,
@@ -77,6 +102,8 @@ class LogEntryService:
         print(f"Indexed {count} log entries")
         return new_logs
 
-def get_log_entry_service() -> LogEntryService:
+
+
+def get_log_entry_service(session: AsyncSession = Depends(get_session)) -> LogEntryService:
     es_client = get_es_client()
-    return LogEntryService(es_client)
+    return LogEntryService(es_client, session)

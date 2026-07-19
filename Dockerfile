@@ -18,8 +18,10 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-
 COPY --from=builder /app/app ./app
+COPY --from=builder /app/frontend ./frontend
+COPY --from=builder /app/alembic.ini ./alembic.ini
+COPY --from=builder /app/alembic ./alembic
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1

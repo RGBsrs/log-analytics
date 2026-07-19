@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log Analytics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+
+    body {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+    }
+
+    .log-row:hover { background: #161b22; }
+
+    .level-DEBUG    { color: #58a6ff; border-color: #58a6ff; }
+    .level-INFO     { color: #3fb950; border-color: #3fb950; }
+    .level-WARNING  { color: #d29922; border-color: #d29922; }
+    .level-ERROR    { color: #f85149; border-color: #f85149; }
+    .level-CRITICAL { color: #bc8cff; border-color: #bc8cff; }
+
+    .bg-level-DEBUG    { background: rgba(88,166,255,0.1); }
+    .bg-level-INFO     { background: rgba(63,185,80,0.1); }
+    .bg-level-WARNING  { background: rgba(210,153,34,0.1); }
+    .bg-level-ERROR    { background: rgba(248,81,73,0.1); }
+    .bg-level-CRITICAL { background: rgba(188,140,255,0.1); }
+
+    .terminal-border { border: 1px solid #30363d; border-radius: 6px; }
+    .terminal-header { background: #161b22; border-bottom: 1px solid #30363d; }
+
+    input, select {
+      background: #0d1117 !important;
+      border: 1px solid #30363d !important;
+      color: #c9d1d9 !important;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: #58a6ff !important; }
+
+    button.primary {
+      background: #238636;
+      border: 1px solid #2ea043;
+      color: #fff;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.primary:hover { background: #2ea043; }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button.secondary {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.secondary:hover { background: #30363d; }
+    button.secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    button.danger {
+      background: transparent;
+      border: 1px solid #f85149;
+      color: #f85149;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.danger:hover { background: rgba(248,81,73,0.1); }
+
+    .nav-tab {
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: #8b949e;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: #c9d1d9; }
+    .nav-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: #0d1117; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+
+    .pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      height: 4px;
+      background: #30363d;
+      border-radius: 2px;
+      border: none !important;
+      padding: 0 !important;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #58a6ff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+  <!-- Header -->
+  <header style="background:#161b22; border-bottom:1px solid #30363d;" class="px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div style="width:10px;height:10px;background:#3fb950;border-radius:50%;" class="pulse"></div>
+      <span style="color:#c9d1d9;font-size:14px;font-weight:600;letter-spacing:0.05em;">LOG ANALYTICS</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span style="color:#8b949e;font-size:12px;" x-text="'ES index: ' + indexName"></span>
+      <span style="color:#8b949e;font-size:12px;" x-text="currentTime"></span>
+    </div>
+  </header>
+
+  <!-- Navigation tabs -->
+  <nav style="background:#161b22;border-bottom:1px solid #30363d;" class="px-6 flex gap-1 overflow-x-auto">
+    <div class="nav-tab" :class="tab==='dashboard' && 'active'" @click="tab='dashboard'">Dashboard</div>
+    <div class="nav-tab" :class="tab==='explorer' && 'active'" @click="tab='explorer'">Log Explorer</div>
+    <div class="nav-tab" :class="tab==='sources' && 'active'" @click="tab='sources'; loadSources()">Sources</div>
+    <div class="nav-tab" :class="tab==='mock' && 'active'" @click="tab='mock'">Mock Generator</div>
+  </nav>
+
+  <main class="p-6 max-w-7xl mx-auto">
+
+    <!-- ── DASHBOARD ── -->
+    <div x-show="tab==='dashboard'" x-cloak>
+      <div class="flex items-center justify-between mb-6">
+        <h2 style="color:#e6edf3;font-size:16px;font-weight:600;">Overview</h2>
+        <button class="secondary" @click="loadStats()">↺ Refresh</button>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 gap-3 mb-6" style="grid-template-columns: repeat(5, 1fr);">
+        <template x-for="s in stats" :key="s.level">
+          <div class="stat-card" :class="'bg-level-' + s.level">
+            <div class="text-xs mb-1" :class="'level-' + s.level" x-text="s.level"></div>
+            <div style="font-size:28px;font-weight:700;color:#e6edf3;" x-text="s.count.toLocaleString()"></div>
+          </div>
+        </template>
+        <template x-if="stats.length === 0">
+          <div class="stat-card col-span-5 text-center py-8" style="color:#8b949e;font-size:13px;">
+            No data yet — generate some logs first
+          </div>
+        </template>
+      </div>
+
+      <!-- Chart -->
+      <div class="terminal-border overflow-hidden">
+        <div class="terminal-header px-4 py-2 flex items-center gap-2">
+          <div style="width:12px;height:12px;background:#f85149;border-radius:50%;"></div>
+          <div style="width:12px;height:12px;background:#d29922;border-radius:50%;"></div>
+          <div style="width:12px;height:12px;background:#3fb950;border-radius:50%;"></div>
+          <span style="color:#8b949e;font-size:12px;margin-left:8px;">log distribution by level</span>
+        </div>
+        <div class="p-4" style="height:280px;">
+          <canvas id="statsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LOG EXPLORER ── -->
+    <div x-show="tab==='explorer'" x-cloak x-data="explorer()" x-init="search()">
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <input
+          style="flex:1;min-width:200px;"
+          placeholder="Search in messages..."
+          x-model="filter.query"
+          @input.debounce.300ms="search()"
+        />
+        <select x-model="filter.level" @change="search()" style="width:140px;">
+          <option value="">All levels</option>
+          <option>DEBUG</option>
+          <option>INFO</option>
+          <option>WARNING</option>
+          <option>ERROR</option>
+          <option>CRITICAL</option>
+        </select>
+        <input
+          placeholder="source_id"
+          x-model="filter.source_id"
+          @input.debounce.300ms="search()"
+          style="width:160px;"
+        />
+        <button class="secondary" @click="search()">Search</button>
+      </div>
+
+      <!-- Results -->
+      <div class="terminal-border overflow-hidden">
+        <div class="terminal-header px-4 py-2 flex items-center justify-between">
+          <span style="color:#8b949e;font-size:12px;">
+            <span x-text="logs.length"></span> results
+            <span x-show="loading" class="pulse ml-2">loading...</span>
+          </span>
+          <div class="flex items-center gap-2">
+            <button class="secondary" @click="prevPage()" :disabled="page===0" style="padding:2px 10px;font-size:12px;">← prev</button>
+            <span style="color:#8b949e;font-size:12px;" x-text="'page ' + (page+1)"></span>
+            <button class="secondary" @click="nextPage()" :disabled="logs.length < filter.size" style="padding:2px 10px;font-size:12px;">next →</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto scrollbar-thin" style="max-height:520px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="border-bottom:1px solid #30363d;position:sticky;top:0;background:#161b22;">
+                <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500;white-space:nowrap;">Timestamp</th>
+                <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500;">Level</th>
+                <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500;">Message</th>
+                <th style="padding:8px 12px;text-align:left;color:#8b949e;font-weight:500;">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="log in logs" :key="log.id">
+                <tr class="log-row" style="border-bottom:1px solid #21262d;">
+                  <td style="padding:8px 12px;color:#8b949e;white-space:nowrap;" x-text="formatTs(log.timestamp)"></td>
+                  <td style="padding:8px 12px;">
+                    <span
+                      class="border rounded px-2 py-0.5 text-xs font-semibold"
+                      :class="'level-' + log.level"
+                      x-text="log.level"
+                    ></span>
+                  </td>
+                  <td style="padding:8px 12px;color:#c9d1d9;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="log.message"></td>
+                  <td style="padding:8px 12px;color:#8b949e;" x-text="log.sourceId"></td>
+                </tr>
+              </template>
+              <template x-if="logs.length === 0 && !loading">
+                <tr>
+                  <td colspan="4" style="padding:48px;text-align:center;color:#8b949e;">
+                    No logs found. Try adjusting your search.
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SOURCES ── -->
+    <div x-show="tab==='sources'" x-cloak x-data="sources()" x-init="load()">
+      <div class="flex items-center justify-between mb-4">
+        <h2 style="color:#e6edf3;font-size:16px;font-weight:600;">Log Sources</h2>
+        <button class="primary" @click="showForm=!showForm">+ Add source</button>
+      </div>
+
+      <!-- Add form -->
+      <div x-show="showForm" class="terminal-border p-4 mb-4" x-cloak>
+        <div class="grid gap-3" style="grid-template-columns:1fr 1fr 2fr;">
+          <input placeholder="Name *" x-model="form.name" />
+          <select x-model="form.source_type">
+            <option value="http">http</option>
+            <option value="file">file</option>
+            <option value="mock">mock</option>
+          </select>
+          <input placeholder="Description (optional)" x-model="form.description" />
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="primary" @click="create()" :disabled="!form.name">Create</button>
+          <button class="secondary" @click="showForm=false;resetForm()">Cancel</button>
+        </div>
+        <div x-show="error" class="mt-2" style="color:#f85149;font-size:12px;" x-text="error"></div>
+      </div>
+
+      <!-- List -->
+      <div class="terminal-border overflow-hidden">
+        <div class="terminal-header px-4 py-2">
+          <span style="color:#8b949e;font-size:12px;" x-text="items.length + ' sources'"></span>
+        </div>
+        <template x-for="s in items" :key="s.id">
+          <div class="log-row flex items-center justify-between px-4 py-3" style="border-bottom:1px solid #21262d;">
+            <div class="flex items-center gap-4">
+              <div
+                style="width:8px;height:8px;border-radius:50%;"
+                :style="s.isActive ? 'background:#3fb950' : 'background:#8b949e'"
+              ></div>
+              <div>
+                <div style="color:#e6edf3;font-size:13px;" x-text="s.name"></div>
+                <div style="color:#8b949e;font-size:11px;" x-text="s.description || '—'"></div>
+              </div>
+              <span
+                style="border:1px solid #30363d;border-radius:4px;padding:1px 8px;font-size:11px;color:#8b949e;"
+                x-text="s.sourceType"
+              ></span>
+            </div>
+            <button class="danger" @click="remove(s.id)">delete</button>
+          </div>
+        </template>
+        <template x-if="items.length === 0">
+          <div style="padding:48px;text-align:center;color:#8b949e;font-size:13px;">
+            No sources yet. Add your first log source above.
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── MOCK GENERATOR ── -->
+    <div x-show="tab==='mock'" x-cloak x-data="mockGen()" >
+      <div class="terminal-border overflow-hidden" style="max-width:560px;">
+        <div class="terminal-header px-4 py-2">
+          <span style="color:#8b949e;font-size:12px;">mock log generator</span>
+        </div>
+        <div class="p-6">
+
+          <!-- Count slider -->
+          <div class="mb-6">
+            <div class="flex justify-between mb-2">
+              <label style="color:#8b949e;font-size:12px;">Log count</label>
+              <span style="color:#58a6ff;font-size:13px;font-weight:600;" x-text="count.toLocaleString()"></span>
+            </div>
+            <input type="range" x-model.number="count" min="10" max="5000" step="10" style="width:100%;" />
+            <div class="flex justify-between mt-1">
+              <span style="color:#8b949e;font-size:11px;">10</span>
+              <span style="color:#8b949e;font-size:11px;">5 000</span>
+            </div>
+          </div>
+
+          <!-- Source ID -->
+          <div class="mb-6">
+            <label style="color:#8b949e;font-size:12px;display:block;margin-bottom:6px;">Source ID (optional)</label>
+            <input placeholder="mock-source" x-model="sourceId" style="width:100%;" />
+          </div>
+
+          <!-- Generate button -->
+          <button
+            class="primary"
+            style="width:100%;padding:10px;"
+            @click="generate()"
+            :disabled="loading"
+          >
+            <span x-show="!loading">⚡ Generate <span x-text="count.toLocaleString()"></span> logs</span>
+            <span x-show="loading" class="pulse">Generating...</span>
+          </button>
+
+          <!-- Result -->
+          <div x-show="result !== null" class="mt-4 p-3 terminal-border" x-cloak>
+            <div style="color:#3fb950;font-size:13px;">
+              ✓ Indexed <strong x-text="result?.indexed"></strong> logs
+              <span x-show="result?.source_id" style="color:#8b949e;">
+                → <span x-text="result?.source_id"></span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Error -->
+          <div x-show="error" class="mt-4" style="color:#f85149;font-size:12px;" x-text="error" x-cloak></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Global GraphQL helper ──────────────────────────────────────────────
+    async function gql(query, variables = {}) {
+      const res = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, variables })
+      });
+      const json = await res.json();
+      if (json.errors) throw new Error(json.errors[0].message);
+      return json.data;
+    }
+
+    // ── Root app ──────────────────────────────────────────────────────────
+    function app() {
+      return {
+        tab: 'dashboard',
+        stats: [],
+        chart: null,
+        indexName: 'logs',
+        currentTime: '',
+
+        init() {
+          this.loadStats();
+          this.tick();
+          setInterval(() => this.tick(), 1000);
+        },
+
+        tick() {
+          this.currentTime = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+        },
+
+        async loadStats() {
+          try {
+            const data = await gql(`query { logStats { level count } }`);
+            this.stats = data.logStats;
+            this.$nextTick(() => this.renderChart());
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        renderChart() {
+          const ctx = document.getElementById('statsChart');
+          if (!ctx) return;
+          if (this.chart) this.chart.destroy();
+
+          const colorMap = {
+            DEBUG: '#58a6ff',
+            INFO: '#3fb950',
+            WARNING: '#d29922',
+            ERROR: '#f85149',
+            CRITICAL: '#bc8cff',
+          };
+
+          this.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: this.stats.map(s => s.level),
+              datasets: [{
+                label: 'Count',
+                data: this.stats.map(s => s.count),
+                backgroundColor: this.stats.map(s => colorMap[s.level] || '#8b949e'),
+                borderRadius: 4,
+                borderSkipped: false,
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: '#161b22',
+                  borderColor: '#30363d',
+                  borderWidth: 1,
+                  titleColor: '#c9d1d9',
+                  bodyColor: '#8b949e',
+                  callbacks: {
+                    label: ctx => ' ' + ctx.parsed.y.toLocaleString() + ' logs'
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { color: '#21262d' },
+                  ticks: { color: '#8b949e', font: { family: 'monospace', size: 12 } }
+                },
+                y: {
+                  grid: { color: '#21262d' },
+                  ticks: { color: '#8b949e', font: { family: 'monospace', size: 12 } }
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    // ── Log Explorer ──────────────────────────────────────────────────────
+    function explorer() {
+      return {
+        logs: [],
+        loading: false,
+        page: 0,
+        filter: { query: '', level: '', source_id: '', size: 25 },
+
+        async search() {
+          this.loading = true;
+          try {
+            const data = await gql(`
+              query Search($q: String, $level: String, $sourceId: String, $from: Int, $size: Int) {
+                logs(filter: { query: $q, level: $level, sourceId: $sourceId, page: $from, size: $size }) {
+                  id level message sourceId timestamp
+                  source { name sourceType }
+                }
+              }
+            `, {
+              q: this.filter.query || null,
+              level: this.filter.level || null,
+              sourceId: this.filter.source_id || null,
+              from: this.page,
+              size: this.filter.size,
+            });
+            this.logs = data.logs;
+          } catch (e) {
+            console.error(e);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        prevPage() {
+          if (this.page > 0) { this.page--; this.search(); }
+        },
+        nextPage() {
+          if (this.logs.length === this.filter.size) { this.page++; this.search(); }
+        },
+
+        formatTs(ts) {
+          if (!ts) return '—';
+          return new Date(ts).toISOString().replace('T', ' ').substring(0, 19);
+        }
+      }
+    }
+
+    // ── Sources ───────────────────────────────────────────────────────────
+    function sources() {
+      return {
+        items: [],
+        showForm: false,
+        error: '',
+        form: { name: '', source_type: 'http', description: '' },
+
+        async load() {
+          try {
+            const data = await gql(`query { logSources { id name sourceType description isActive createdAt } }`);
+            this.items = data.logSources;
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async create() {
+          this.error = '';
+          try {
+            await gql(`
+              mutation Create($input: LogSourceInput!) {
+                createLogSource(input: $input) { id }
+              }
+            `, { input: { name: this.form.name, sourceType: this.form.source_type, description: this.form.description || null } });
+            this.resetForm();
+            this.showForm = false;
+            await this.load();
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+
+        async remove(id) {
+          if (!confirm('Delete this source?')) return;
+          try {
+            await gql(`mutation Del($id: ID!) { deleteLogSource(id: $id) }`, { id });
+            await this.load();
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        resetForm() {
+          this.form = { name: '', source_type: 'http', description: '' };
+          this.error = '';
+        }
+      }
+    }
+
+    // ── Mock Generator ────────────────────────────────────────────────────
+    function mockGen() {
+      return {
+        count: 100,
+        sourceId: '',
+        loading: false,
+        result: null,
+        error: '',
+
+        async generate() {
+          this.loading = true;
+          this.result = null;
+          this.error = '';
+          try {
+            const body = { count: this.count };
+            if (this.sourceId) body.source_id = this.sourceId;
+
+            const res = await fetch('/api/v1/ingest/mock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Request failed: ' + res.status);
+            this.result = await res.json();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
