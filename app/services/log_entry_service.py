@@ -102,6 +102,31 @@ class LogEntryService:
         print(f"Indexed {count} log entries")
         return new_logs
 
+    async def fetch_messages(self, hours: int = 24) -> list[str]:
+        query = {
+            "size": 0,
+            "query": {
+                "range": {
+                    "timestamp": {
+                        "gte": f"now-{hours}h"
+                    }
+                }
+            },
+            "aggs": {
+                "by_message": {
+                    "terms": {
+                        "field": "message.keyword",
+                        "size": 1000
+                    },
+                    "aggs": {
+                        "level": {"terms": {"field": "level", "size": 1}},
+                        "source": {"terms": {"field": "source_id", "size": 1}}
+                    }
+                }
+            }
+        }
+        result = await self.es_client.search(body=query)
+        return [hit["_source"]["message"] for hit in result["hits"]["hits"]]
 
 
 def get_log_entry_service(session: AsyncSession = Depends(get_session)) -> LogEntryService:
