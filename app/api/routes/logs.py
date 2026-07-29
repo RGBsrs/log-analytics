@@ -1,14 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query  # noqa: I001
 from elasticsearch import AsyncElasticsearch
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_session
 from app.core.elasticsearch import get_es
 from app.schemas.log_entry import LogEntryCreate, LogEntryRead, LogLevel
 from app.services.log_entry_service import LogEntryService
 
 router = APIRouter(prefix="/logs", tags=["Logs"])
 
-async def get_log_service(es_client: AsyncElasticsearch = Depends(get_es)) -> LogEntryService:
-    return LogEntryService(es_client=es_client)
+async def get_log_service(
+    es_client: AsyncElasticsearch = Depends(get_es),
+    session: AsyncSession = Depends(get_session),
+) -> LogEntryService:
+    return LogEntryService(es_client=es_client, session=session)
 
 @router.post("/", response_model=LogEntryRead, status_code=201)
 async def ingest_log_entry(

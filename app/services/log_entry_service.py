@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.elasticsearch import get_es_client
-from app.schemas.log_entry import LogEntryRead, LogEntryCreate
+from app.schemas.log_entry import LogEntryCreate, LogEntryRead, LogLevel, LogSearchResult
 from app.schemas.log_source import LogSourceCreate
 from app.services.log_source_service import LogSourceService
 
@@ -102,7 +102,7 @@ class LogEntryService:
         print(f"Indexed {count} log entries")
         return new_logs
 
-    async def fetch_messages(self, hours: int = 24) -> list[str]:
+    async def fetch_messages(self, hours: int = 24) -> list[LogSearchResult]:
         query = {
             "size": 0,
             "query": {
@@ -126,9 +126,16 @@ class LogEntryService:
             }
         }
         result = await self.es_client.search(body=query)
-        return [hit["_source"]["message"] for hit in result["hits"]["hits"]]
+        return [
+            LogSearchResult(
+                message=agg["key"],
+                level=LogLevel(agg["level"]["buckets"][0]["key"]),
+                source_id=agg["source"]["buckets"][0]["key"],
+            )
+            for agg in result["aggregations"]["by_message"]["buckets"]
+        ]
 
 
-def get_log_entry_service(session: AsyncSession = Depends(get_session)) -> LogEntryService:
+def get_log_entry_service(session: AsyncSession = Depends(get_session)) -> LogEntryService:  # noqa: B008
     es_client = get_es_client()
     return LogEntryService(es_client, session)

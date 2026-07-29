@@ -1,10 +1,11 @@
 
 from webbrowser import get
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from pydantic import BaseModel, Field
 
 from app.schemas.log_entry import LogEntryCreate
+from app.services.kafka_service import KafkaProducerService
 from app.services.log_entry_service import LogEntryService, get_log_entry_service
 from app.services.mock_generator import generate_log_entries
 
@@ -18,10 +19,15 @@ class MockIngestRequest(BaseModel):
     count: int = Field(default=100, ge=1, le=10000)
     source_id: str | None = None
 
-@router.post("/", status_code=201)
-async def ingest_logs(request: BatchIngestRequest, service: LogEntryService = Depends(get_log_entry_service)):
-    await service.index_log_entry_bulk(request.logs)
-    return {"message": "Logs ingested successfully"}
+
+
+@router.post("/", status_code=202)
+async def ingest_logs(request: Request, data: BatchIngestRequest, service: LogEntryService = Depends(get_log_entry_service)):
+    producer = request.app.state.kafka_producer
+    producer_service = KafkaProducerService(producer)
+    for log in data.logs:
+        await producer_service.send_log(log)
+    return {"queued": len(data.logs)}
 
 @router.post("/mock", status_code=201)
 async def mock_ingest(request: MockIngestRequest, service: LogEntryService = Depends(get_log_entry_service)):

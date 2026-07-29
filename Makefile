@@ -19,17 +19,23 @@ health:
 clean:
 	docker compose down -v  # видаляє також volumes (дані!)
 
+restart-api:
+	docker compose restart api
+
+rebuild-api:
+	docker compose up -d --build api
+
 migrate:
 	@if [ -z "$(msg)" ]; then echo "Помилка: вкажи msg=\"...\""; exit 1; fi
-	docker compose exec api alembic revision --autogenerate -m "$(msg)"
+	uv run alembic revision --autogenerate -m "$(msg)"
 
 migrate-up:
-	docker compose exec api alembic upgrade head
+	uv run alembic upgrade head
 
 migrate-down:
-	docker compose exec api alembic downgrade -1
+	uv run alembic downgrade -1
 
 migrate-history:
-	docker compose exec api alembic history
+	uv run alembic history
 
 .PHONY: migrate migrate-up migrate-down migrate-history

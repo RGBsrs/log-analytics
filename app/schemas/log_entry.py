@@ -28,3 +28,9 @@ class LogEntryCreate(LogEntryBase):
 class LogEntryRead(LogEntryBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class LogSearchResult(BaseModel):
+    level: LogLevel
+    message: str
+    source_id: str

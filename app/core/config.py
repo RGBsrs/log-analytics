@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     postgres_password: str
     es_host: str
     es_index_logs: str
+    kafka_bootstrap_servers: str
     model_config = SettingsConfigDict(env_file=".env")
 
     @property

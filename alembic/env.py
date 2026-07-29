@@ -7,6 +7,7 @@ from alembic import context
 from app.core.config import get_settings
 from app.models.base import Base
 from app.models.log_source import LogSource  # noqa — щоб Base.metadata знав про таблицю
+from app.models.log_patterns import LogPattern  # noqa — щоб Base.metadata знав про таблицю
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
